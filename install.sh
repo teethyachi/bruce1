@@ -25,6 +25,10 @@ HY2_DIR=/etc/hysteria
 GEO_DIR=/usr/local/share/xray
 WARP_PORT=40000
 
+# 记下用户在命令行明确指定的值，重新安装时优先于已保存的配置
+USER_REALITY_SNI=${REALITY_SNI:-}
+USER_HY2_SNI=${HY2_SNI:-}
+USER_PORT=${PORT:-}
 REALITY_SNI=${REALITY_SNI:-www.microsoft.com}
 HY2_SNI=${HY2_SNI:-www.bing.com}
 PORT=${PORT:-443}
@@ -118,6 +122,9 @@ load_or_create_state() {
   if [[ -f $STATE_FILE ]]; then
     info "发现已有配置，沿用原来的密钥"
     . "$STATE_FILE"
+    REALITY_SNI=${USER_REALITY_SNI:-$REALITY_SNI}
+    HY2_SNI=${USER_HY2_SNI:-$HY2_SNI}
+    PORT=${USER_PORT:-$PORT}
   fi
 }
 
