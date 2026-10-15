@@ -56,9 +56,12 @@ check_os() {
 # 升级 grub-pc 时会报 "post-installation script subprocess returned error exit status 1"
 fix_grub_device() {
   dpkg -s grub-pc >/dev/null 2>&1 || return 0
-  local disk
-  disk=$(lsblk -no PKNAME "$(findmnt -no SOURCE /)" 2>/dev/null | head -n1)
-  [[ -n $disk ]] || disk=$(lsblk -dno NAME,TYPE | awk '$2=="disk"{print $1; exit}')
+  local root_src disk
+  root_src=$(findmnt -no SOURCE / 2>/dev/null || true)
+  disk=$(lsblk -no PKNAME "$root_src" 2>/dev/null | head -n1)
+  # 根分区直接就是整块磁盘时没有 PKNAME
+  [[ -n $disk ]] || { [[ $(lsblk -dno TYPE "$root_src" 2>/dev/null) == disk ]] && disk=${root_src#/dev/}; }
+  [[ -n $disk ]] || disk=$(lsblk -dno NAME,TYPE | awk '$2=="disk" && $1 !~ /^(zram|loop)/ {print $1; exit}')
   [[ -b /dev/$disk ]] || return 0
   echo "grub-pc grub-pc/install_devices multiselect /dev/$disk" | debconf-set-selections
 }
