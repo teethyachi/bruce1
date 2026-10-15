@@ -15,6 +15,7 @@
 #   ENABLE_WARP=1                   设为 0 则不安装 WARP（流媒体不走 WARP）
 
 set -euo pipefail
+trap 'red "脚本在第 $LINENO 行出错退出，请把上面的输出发给我"' ERR
 
 STATE_DIR=/etc/bruce-vpn
 STATE_FILE=$STATE_DIR/state.env
@@ -58,10 +59,10 @@ fix_grub_device() {
   dpkg -s grub-pc >/dev/null 2>&1 || return 0
   local root_src disk
   root_src=$(findmnt -no SOURCE / 2>/dev/null || true)
-  disk=$(lsblk -no PKNAME "$root_src" 2>/dev/null | head -n1)
+  disk=$(lsblk -no PKNAME "$root_src" 2>/dev/null | head -n1) || true
   # 根分区直接就是整块磁盘时没有 PKNAME
   [[ -n $disk ]] || { [[ $(lsblk -dno TYPE "$root_src" 2>/dev/null) == disk ]] && disk=${root_src#/dev/}; }
-  [[ -n $disk ]] || disk=$(lsblk -dno NAME,TYPE | awk '$2=="disk" && $1 !~ /^(zram|loop)/ {print $1; exit}')
+  [[ -n $disk ]] || disk=$(lsblk -dno NAME,TYPE | awk '$2=="disk" && $1 !~ /^(zram|loop)/ {print $1; exit}') || true
   [[ -b /dev/$disk ]] || return 0
   echo "grub-pc grub-pc/install_devices multiselect /dev/$disk" | debconf-set-selections
 }
@@ -311,7 +312,8 @@ install_warp() {
 setup_firewall() {
   info "配置防火墙"
   local ssh_port
-  ssh_port=$(sshd -T 2>/dev/null | awk '/^port /{print $2; exit}')
+  # 不能在 awk 里 exit：sshd 会收到 SIGPIPE，配合 pipefail 让整个脚本静默退出
+  ssh_port=$(sshd -T 2>/dev/null | awk '/^port /{p=$2} END{print p}') || true
   ssh_port=${ssh_port:-22}
   ufw allow "$ssh_port"/tcp >/dev/null
   ufw allow "$PORT"/tcp >/dev/null
