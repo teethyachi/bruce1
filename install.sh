@@ -52,11 +52,25 @@ check_os() {
   OS_CODENAME=${VERSION_CODENAME:-}
 }
 
+# 很多 VPS 镜像里 grub-pc 记录的安装磁盘（如 /dev/sda）和实际磁盘（如 /dev/vda）对不上，
+# 升级 grub-pc 时会报 "post-installation script subprocess returned error exit status 1"
+fix_grub_device() {
+  dpkg -s grub-pc >/dev/null 2>&1 || return 0
+  local disk
+  disk=$(lsblk -no PKNAME "$(findmnt -no SOURCE /)" 2>/dev/null | head -n1)
+  [[ -n $disk ]] || disk=$(lsblk -dno NAME,TYPE | awk '$2=="disk"{print $1; exit}')
+  [[ -b /dev/$disk ]] || return 0
+  echo "grub-pc grub-pc/install_devices multiselect /dev/$disk" | debconf-set-selections
+}
+
 install_packages() {
   info "更新系统并安装基础软件"
   export DEBIAN_FRONTEND=noninteractive
+  fix_grub_device
+  dpkg --configure -a || true
   apt-get update -y
-  apt-get upgrade -y
+  apt-get -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold upgrade -y \
+    || red "系统升级有部分软件包失败，继续安装（不影响代理）"
   apt-get install -y curl wget unzip jq openssl qrencode ufw fail2ban python3-systemd gnupg ca-certificates iproute2
 }
 
